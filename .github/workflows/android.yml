@@ -20,11 +20,11 @@ jobs:
       - name: Unzip project archive
         run: |
           set -x
-          if [ ! -f gooning_fixed.zip ]; then
+          if [ ! -f gooning_fixed-2.zip ]; then
             echo "ERROR: gooning.zip not found in repository root"
             exit 1
           fi
-          unzip -o gooning_fixed.zip
+          unzip -o gooning_fixed-2.zip
           echo "=== FILES AFTER UNZIP ==="
           ls -la
 
