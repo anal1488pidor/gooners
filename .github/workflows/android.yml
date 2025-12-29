@@ -1,83 +1,63 @@
-name: Android CI
+name: Android ZIP build (full logs)
 
-# запускается при пуше и вручную
 on:
-  push:
-    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-
-    env:
-      # если нужно, можно отредактировать
-      ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
-      # ограничиваем память JVM для Gradle (по вкусу)
-      GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx1536m"
+    timeout-minutes: 60
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+
+      - name: Show repository root
+        run: |
+          echo "=== ROOT FILES ==="
+          ls -la
+
+      - name: Unzip project archive
+        run: |
+          set -x
+          if [ ! -f gooning.zip ]; then
+            echo "ERROR: gooning.zip not found in repository root"
+            exit 1
+          fi
+          unzip -o gooning.zip
+          echo "=== FILES AFTER UNZIP ==="
+          ls -la
+
+      - name: Find gradlew
+        run: |
+          set -x
+          GRADLEW_PATH=$(find . -name gradlew | head -n 1 || true)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "ERROR: gradlew not found after unzip"
+            exit 1
+          fi
+          echo "FOUND_GRADLEW=$GRADLEW_PATH" >> $GITHUB_ENV
+          echo "Gradlew found at: $GRADLEW_PATH"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: 17
 
-      - name: Debug project structure (for troubleshooting)
+      - name: Print Java & Gradle info
         run: |
-          echo "=== ROOT ==="
-          ls -la
-          echo
-          echo "=== SEARCH gradlew (top 20 matches) ==="
-          find . -maxdepth 6 -name gradlew -print | sed -n '1,20p' || true
-          echo
-          echo "=== LIST top-level dirs ==="
-          ls -la || true
-        shell: bash
+          java -version
+          echo "Gradlew path: $FOUND_GRADLEW"
 
-      - name: Try accept Android SDK licenses (if sdkmanager available)
+      - name: Build Android project (FULL LOGS)
         run: |
-          if [ -x "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" ]; then
-            echo "sdkmanager found, accepting licenses..."
-            yes | "${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager" --licenses || true
-          else
-            echo "sdkmanager not found at ${ANDROID_SDK_ROOT}/cmdline-tools/latest/bin/sdkmanager — skipping licenses step"
-          fi
-        shell: bash
-
-      - name: Find gradlew and build (clean + assembleDebug)
-        # делаем всё в одном шаге: найти gradlew -> перейти в каталог -> chmod -> собрать
-        run: |
-          set -euo pipefail
-          echo "Searching for gradlew..."
-          GRADLEW_PATH="$(find . -name gradlew | head -n 1 || true)"
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "ERROR: gradlew not found in repository."
-            echo "Make sure your project contains a Gradle wrapper (file named 'gradlew')."
-            exit 1
-          fi
-          PROJECT_DIR="$(dirname "$GRADLEW_PATH")"
-          echo "gradlew found: $GRADLEW_PATH"
-          echo "project dir: $PROJECT_DIR"
-          ls -la "$PROJECT_DIR" || true
-          chmod +x "$PROJECT_DIR/gradlew"
+          set -euxo pipefail
+          PROJECT_DIR=$(dirname "$FOUND_GRADLEW")
           cd "$PROJECT_DIR"
-          echo "Running: ./gradlew clean assembleDebug --no-daemon --info --stacktrace"
-          ./gradlew clean assembleDebug --no-daemon --info --stacktrace
-        shell: bash
-        # если надо, увеличить timeout (по умолчанию 6 часов) через `timeout-minutes` в job-level
-
-      - name: Upload APKs (if any were produced)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: apk-output
-          # найдет apk в подпапках, относительно workspace
-          path: |
-            **/app/build/outputs/**/*.apk
-            **/outputs/**/*.apk
+          chmod +x gradlew
+          ./gradlew clean assembleDebug \
+            --no-daemon \
+            --stacktrace \
+            --info \
+            --warning-mode all
