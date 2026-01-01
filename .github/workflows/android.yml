@@ -1,43 +1,17 @@
-name: Android ZIP build (full logs)
+name: Build ZOVconsole (clean logs)
 
 on:
+  push:
+    branches: [ "main" ]
   workflow_dispatch:
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
 
     steps:
-      - name: Checkout repository
+      - name: Checkout repo
         uses: actions/checkout@v4
-
-      - name: Show repository root
-        run: |
-          echo "=== ROOT FILES ==="
-          ls -la
-
-      - name: Unzip project archive
-        run: |
-          set -x
-          if [ ! -f ZOVconsole.zip ]; then
-            echo "ERROR: gooning.zip not found in repository root"
-            exit 1
-          fi
-          unzip -o ZOVconsole.zip
-          echo "=== FILES AFTER UNZIP ==="
-          ls -la
-
-      - name: Find gradlew
-        run: |
-          set -x
-          GRADLEW_PATH=$(find . -name gradlew | head -n 1 || true)
-          if [ -z "$GRADLEW_PATH" ]; then
-            echo "ERROR: gradlew not found after unzip"
-            exit 1
-          fi
-          echo "FOUND_GRADLEW=$GRADLEW_PATH" >> $GITHUB_ENV
-          echo "Gradlew found at: $GRADLEW_PATH"
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
@@ -45,26 +19,34 @@ jobs:
           distribution: temurin
           java-version: 17
 
-      - name: Print Java & Gradle info
+      - name: Unzip project
         run: |
-          java -version
-          echo "Gradlew path: $FOUND_GRADLEW"
+          unzip -q ZOVconsole.zip -d project
 
-      - name: Build Android project (FULL LOGS)
+      - name: Make gradlew executable
+        run: chmod +x project/gradlew
+
+      # Сборка с ТИХИМ выводом
+      - name: Build APK (quiet)
+        id: build
+        working-directory: project
         run: |
-          set -euxo pipefail
-          PROJECT_DIR=$(dirname "$FOUND_GRADLEW")
-          cd "$PROJECT_DIR"
-          chmod +x gradlew
-          ./gradlew clean assembleDebug \
+          ./gradlew assembleDebug \
+            --quiet \
             --no-daemon \
-            --stacktrace \
-            --info \
-            --warning-mode all
+            --warning-mode=none
+
+      # Если упало — показать нормальную ошибку
+      - name: Print error log (only if failed)
+        if: failure()
+        working-directory: project
+        run: |
+          echo "===== BUILD FAILED ====="
+          ./gradlew assembleDebug --stacktrace --no-daemon
 
       - name: Upload APK
+        if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apk
-          path: |
-            **/app/build/outputs/apk/debug/*.apk
+          name: ZOVconsole-debug-apk
+          path: project/app/build/outputs/apk/debug/*.apk
