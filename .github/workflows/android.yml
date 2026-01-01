@@ -21,7 +21,7 @@ jobs:
 
       - name: Unzip project
         run: |
-          unzip -q ZOVconsole_project.zip -d project
+          unzip -q ZOVconsole.zip -d project
           echo "ZIP content:"
           ls project
 
