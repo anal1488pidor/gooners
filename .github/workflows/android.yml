@@ -1,4 +1,4 @@
-name: Build ZOVconsole (clean logs)
+name: Build ZOVconsole (auto gradlew)
 
 on:
   push:
@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout
         uses: actions/checkout@v4
 
       - name: Set up JDK 17
@@ -21,32 +21,25 @@ jobs:
 
       - name: Unzip project
         run: |
-          unzip -q ZOVconsole.zip -d project
+          unzip -q ZOVconsole_project.zip -d project
+          echo "ZIP content:"
+          ls project
 
-      - name: Make gradlew executable
-        run: chmod +x project/gradlew
+      - name: Find gradlew
+        run: |
+          GRADLEW_PATH=$(find project -name gradlew | head -n 1)
+          echo "Found gradlew at: $GRADLEW_PATH"
+          chmod +x "$GRADLEW_PATH"
+          echo "GRADLEW=$GRADLEW_PATH" >> $GITHUB_ENV
 
-      # Сборка с ТИХИМ выводом
       - name: Build APK (quiet)
-        id: build
-        working-directory: project
         run: |
-          ./gradlew assembleDebug \
-            --quiet \
-            --no-daemon \
-            --warning-mode=none
-
-      # Если упало — показать нормальную ошибку
-      - name: Print error log (only if failed)
-        if: failure()
-        working-directory: project
-        run: |
-          echo "===== BUILD FAILED ====="
-          ./gradlew assembleDebug --stacktrace --no-daemon
+          cd "$(dirname "$GRADLEW")"
+          ./gradlew assembleDebug --quiet --no-daemon --warning-mode=none
 
       - name: Upload APK
-        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: ZOVconsole-debug-apk
-          path: project/app/build/outputs/apk/debug/*.apk
+          path: |
+            project/**/app/build/outputs/apk/debug/*.apk
