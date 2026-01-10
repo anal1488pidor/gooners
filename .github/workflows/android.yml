@@ -18,7 +18,7 @@ jobs:
           java-version: 17
 
       - name: Unzip project
-        run: unzip zov_keyboard.zip
+        run: unzip photochlena.zip
 
       - name: Locate Gradle project root
         run: |
